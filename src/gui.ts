@@ -230,6 +230,60 @@ export function downloadSVG() {
     }
 }
 
+export async function downloadPDF() {
+    // @ts-ignore - jspdf is loaded via script tag in index.html
+    const { jsPDF } = window.jspdf;
+    
+    const svgElement = document.querySelector("#svgContainer svg") as SVGElement;
+    if (!svgElement) {
+        alert("Please process an image first!");
+        return;
+    }
+
+    // Clone the SVG so we don't change the UI the user sees
+    const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+    
+    // Convert to Coloring Page: White fill, Black borders
+    $(clonedSvg).find("path").css({
+        "fill": "#ffffff",
+        "stroke": "#000000",
+        "stroke-width": "0.5" 
+    });
+
+    // Ensure labels stay black even if user had a different setting
+    $(clonedSvg).find("text").css("fill", "#000000");
+
+    const pdf = new jsPDF('p', 'pt', 'a4');
+    const margin = 40;
+    const pdfWidth = pdf.internal.pageSize.getWidth() - (margin * 2);
+    
+    // 1. Render SVG to PDF
+    // @ts-ignore - svg2pdf is loaded via script tag
+    await pdf.svg(clonedSvg, {
+        x: margin,
+        y: margin,
+        width: pdfWidth,
+        height: 500 // Adjust height based on image aspect ratio if needed
+    });
+
+    // 2. Add Palette PNG at the bottom
+    // The palette is usually in a div with id 'palette'
+    const paletteDiv = document.getElementById("palette");
+    if (paletteDiv) {
+        // We can create a temporary canvas to draw the palette colors
+        // Or grab the existing palette display if it's already a canvas
+        const canvas = paletteDiv.querySelector("canvas");
+        if (canvas) {
+            const imgData = canvas.toDataURL("image/png");
+            pdf.setFontSize(14);
+            pdf.text("Color Palette", margin, 580);
+            pdf.addImage(imgData, 'PNG', margin, 590, pdfWidth, 40);
+        }
+    }
+
+    pdf.save("paint-by-number-coloring-page.pdf");
+}
+
 export function loadExample(imgId: string) {
     // load image
     const img = document.getElementById(imgId) as HTMLImageElement;
