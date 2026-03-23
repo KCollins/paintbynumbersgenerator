@@ -4,6 +4,7 @@ export enum ClusteringColorSpace {
     RGB = 0,
     HSL = 1,
     LAB = 2,
+    CHROMADEPTH = 3
 }
 
 export class Settings {
