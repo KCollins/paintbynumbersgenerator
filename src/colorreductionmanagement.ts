@@ -122,31 +122,76 @@ export class ColorReducer {
         const kmeans = new KMeans(vectors, settings.kMeansNrOfClusters, random);
 
         let curTime = new Date().getTime();
+// --- NEW CHROMADEPTH LOGIC ---
+        // This checks if the user selected the new ChromaDepth color space
+        if (settings.kMeansClusteringColorSpace as any === 3) { 
+            // 1. Map every unique color in the photo to its closest ChromaDepth palette match
+            const colorToGlobalIdx: IMap<number> = {};
+            const globalIdxCounts: IMap<number> = {};
 
-        kmeans.step();
-        while (kmeans.currentDeltaDistanceDifference > settings.kMeansMinDeltaDifference) {
-            kmeans.step();
-
-            // update GUI every 500ms
-            if (new Date().getTime() - curTime > 500) {
-                curTime = new Date().getTime();
-
-                await delay(0);
-                if (onUpdate != null) {
-                    ColorReducer.updateKmeansOutputImageData(kmeans, settings, pointsByColor, imgData, outputImgData, false);
-                    onUpdate(kmeans);
-                }
+            for (const color of Object.keys(pointsByColor)) {
+                const rgb = color.split(",").map(v => parseInt(v));
+                const gIdx = getNearestChromaColorIndex(rgb[0], rgb[1], rgb[2]);
+                colorToGlobalIdx[color] = gIdx;
+                // Count how many pixels use this depth color
+                globalIdxCounts[gIdx] = (globalIdxCounts[gIdx] || 0) + pointsByColor[color].length;
             }
 
-        }
+            // 2. Pick the 'Top K' colors based on the "Number of Colors" slider
+            const topGIndices = Object.keys(globalIdxCounts)
+                .map(Number)
+                .sort((a, b) => globalIdxCounts[b] - globalIdxCounts[a])
+                .slice(0, settings.kMeansNrOfClusters)
+                .sort((a, b) => a - b); // Crucial: Re-sort so #1 is Red and #Last is Black
 
-        // update the output image data (because it will be used for further processing)
-        ColorReducer.updateKmeansOutputImageData(kmeans, settings, pointsByColor, imgData, outputImgData, true);
+            // 3. Update the image data by "snapping" pixels to our Top K depth colors
+            for (const color of Object.keys(pointsByColor)) {
+                const currentGIdx = colorToGlobalIdx[color];
+                let bestGIdx = topGIndices[0];
+                let minD = Infinity;
+                for (const targetGIdx of topGIndices) {
+                    const c1 = CHROMA_DEPTH_PALETTE[currentGIdx];
+                    const c2 = CHROMA_DEPTH_PALETTE[targetGIdx];
+                    // Euclidean distance between the palette colors
+                    const d = Math.pow(c1[0]-c2[0], 2) + Math.pow(c1[1]-c2[1], 2) + Math.pow(c1[2]-c2[2], 2);
+                    if (d < minD) { minD = d; bestGIdx = targetGIdx; }
+                }
+
+                const finalRGB = CHROMA_DEPTH_PALETTE[bestGIdx];
+                for (const pt of pointsByColor[color]) {
+                    const ptx = pt % imgData.width;
+                    const pty = Math.floor(pt / imgData.width);
+                    let dataOffset = (pty * imgData.width + ptx) * 4;
+                    outputImgData.data[dataOffset] = finalRGB[0];
+                    outputImgData.data[dataOffset + 1] = finalRGB[1];
+                    outputImgData.data[dataOffset + 2] = finalRGB[2];
+                    outputImgData.data[dataOffset + 3] = 255;
+                }
+            }
+        } else {
+            // --- ORIGINAL K-MEANS LOGIC STARTS HERE ---
+            const kmeans = new KMeans(vectors, settings.kMeansNrOfClusters, random);
+            let curTime = new Date().getTime();
+
+            kmeans.step();
+            while (kmeans.currentDeltaDistanceDifference > settings.kMeansMinDeltaDifference) {
+                kmeans.step();
+                if (new Date().getTime() - curTime > 500) {
+                    curTime = new Date().getTime();
+                    await delay(0);
+                    if (onUpdate != null) {
+                        ColorReducer.updateKmeansOutputImageData(kmeans, settings, pointsByColor, imgData, outputImgData, false);
+                        onUpdate(kmeans);
+                    }
+                }
+            }
+            // Update output with final centroids
+            ColorReducer.updateKmeansOutputImageData(kmeans, settings, pointsByColor, imgData, outputImgData, true);
+        }
 
         if (onUpdate != null) {
-            onUpdate(kmeans);
+            onUpdate({} as any); // Trigger the final UI refresh
         }
-    }
 
     /**
      *  Updates the image data from the current kmeans centroids and their respective associated colors (vectors)
