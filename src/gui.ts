@@ -37,6 +37,9 @@ export function parseSettings(): Settings {
         settings.kMeansClusteringColorSpace = ClusteringColorSpace.HSL;
     } else if ($("#optColorSpaceRGB").prop("checked")) {
         settings.kMeansClusteringColorSpace = ClusteringColorSpace.LAB;
+    } else if ($("#optColorSpaceChroma").prop("checked")) {
+        // This links to the value 3 we added in settings.ts
+        settings.kMeansClusteringColorSpace = ClusteringColorSpace.CHROADEPTH;
     }
 
     if ($("#optFacetRemovalLargestToSmallest").prop("checked")) {
