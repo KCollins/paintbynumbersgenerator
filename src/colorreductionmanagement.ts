@@ -8,6 +8,9 @@ import { ClusteringColorSpace, Settings } from "./settings";
 import { Uint8Array2D } from "./structs/typedarrays";
 import { Random } from "./random";
 
+// Import Chromadepth palette
+import { CHROMA_DEPTH_PALETTE, getNearestChromaColorIndex } from "./chromadepth";
+
 export class ColorMapResult {
     public imgColorIndices!: Uint8Array2D;
     public colorsByIndex!: RGB[];
